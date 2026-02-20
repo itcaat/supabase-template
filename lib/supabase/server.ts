@@ -26,25 +26,7 @@ export async function createClient() {
   )
 }
 
-export async function createServiceClient() {
-  const cookieStore = await cookies()
-
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options),
-            )
-          } catch {}
-        },
-      },
-    },
-  )
-}
+// createServiceClient() is intentionally omitted from this template.
+// If you need to bypass RLS for admin tasks (e.g. background jobs, webhooks),
+// create a service client with SUPABASE_SERVICE_ROLE_KEY only in that specific
+// server-only file — never expose the key to the browser or commit it to git.
