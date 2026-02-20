@@ -1,7 +1,10 @@
 {
-  "name": "supabase-template-build",
+  "name": "supabase-template",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
