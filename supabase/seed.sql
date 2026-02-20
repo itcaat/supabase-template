@@ -1,0 +1,25 @@
+-- ============================================================
+-- seed.sql — local development seed data
+-- Run AFTER migrations. Requires Supabase local dev stack.
+-- ============================================================
+
+-- NOTE: Users must be created via Supabase Auth (supabase auth users create)
+-- or through the signup UI. The handle_new_user() trigger will
+-- automatically create org + project + memberships.
+--
+-- Example CLI command to create a test user:
+--   supabase auth users create --email dev@example.com --password password123 \
+--     --user-metadata '{"full_name": "Dev User"}'
+--
+-- After creating the user, you can add demo data here:
+
+-- Example: update the personal org to have a friendlier name
+-- UPDATE organizations
+-- SET name = 'Demo Workspace'
+-- WHERE slug = (
+--   SELECT o.slug FROM organizations o
+--   JOIN organization_members om ON om.org_id = o.id
+--   JOIN auth.users u ON u.id = om.user_id
+--   WHERE u.email = 'dev@example.com' AND o.type = 'personal'
+--   LIMIT 1
+-- );
