@@ -72,7 +72,51 @@ supabase secrets set APP_URL=https://yourapp.com
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are
 injected automatically by Supabase — you do not need to set them manually.
 
-## 5. Run locally
+## 5. Set up Google OAuth (optional)
+
+Skip this step if you only want email/password login.
+
+### A. Google Cloud Console
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com)
+2. Create a project (or select an existing one)
+3. Navigate to **APIs & Services → OAuth consent screen**
+   - User type: **External** → fill in app name, support email, developer email → Save
+4. Navigate to **APIs & Services → Credentials → Create Credentials → OAuth client ID**
+   - Application type: **Web application**
+   - Name: anything (e.g. `Supabase Template`)
+   - **Authorized redirect URIs** — add:
+     ```
+     https://<your-project-ref>.supabase.co/auth/v1/callback
+     ```
+   - Click **Create** → copy the **Client ID** and **Client Secret**
+
+### B. Supabase Dashboard
+
+1. Go to **Authentication → Providers → Google**
+2. Toggle **Enable Google provider** on
+3. Paste your **Client ID** and **Client Secret**
+4. Save
+
+### C. Local development redirect
+
+For `localhost` to work during development, also add this to the authorized redirect URIs in Google Console:
+
+```
+http://localhost:3000/auth/callback
+```
+
+And in Supabase Dashboard → **Authentication → URL Configuration**, add to **Redirect URLs**:
+
+```
+http://localhost:3000/auth/callback
+```
+
+The `OAuthButton` component in this template calls `supabase.auth.signInWithOAuth({ provider: 'google' })` — no code changes needed once the above is configured.
+
+---
+
+## 6. Run locally
 
 ```bash
 npm run dev
