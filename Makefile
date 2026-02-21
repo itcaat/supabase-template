@@ -4,10 +4,14 @@ ENV_FILE := .env.local
 PROJECT_REF := $(shell grep '^NEXT_PUBLIC_SUPABASE_URL=' $(ENV_FILE) 2>/dev/null \
 	| sed 's|.*https://\([^.]*\)\.supabase\.co.*|\1|')
 
-.PHONY: link db-push db-reset functions-deploy secrets-set dev help
+.PHONY: sup-login link db-push db-reset functions-deploy secrets-set dev help
+
+## Authenticate the Supabase CLI with your account
+sup-login:
+	supabase login
 
 ## Link the Supabase CLI to your project (reads project ref from .env.local)
-link:
+sup-link:
 	@if [ -z "$(PROJECT_REF)" ]; then \
 		echo "Error: could not extract project ref from $(ENV_FILE)"; \
 		echo "Make sure NEXT_PUBLIC_SUPABASE_URL is set."; \
