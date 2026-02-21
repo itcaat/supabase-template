@@ -1,16 +1,17 @@
 import { createBrowserClient } from '@supabase/ssr'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-// Module-level singleton — ensures only one client (and one navigator lock)
-// exists across React Strict Mode double-invocations and re-renders.
-let client: SupabaseClient | null = null
+// Store the singleton on globalThis so it survives Turbopack/webpack HMR
+// module re-evaluation in development. Without this, each hot reload creates
+// a new SupabaseClient that fights the previous one for the navigator lock.
+const g = globalThis as typeof globalThis & { __supabase?: SupabaseClient }
 
 export function createClient(): SupabaseClient {
-  if (!client) {
-    client = createBrowserClient(
+  if (!g.__supabase) {
+    g.__supabase = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     )
   }
-  return client
+  return g.__supabase
 }
