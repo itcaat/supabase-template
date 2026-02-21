@@ -88,7 +88,25 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   }, [supabase])
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    let mounted = true
+
+    // getSession() reads from local storage — does NOT acquire the navigator lock.
+    // This avoids the lock-timeout crash React Strict Mode causes when
+    // onAuthStateChange is registered twice in quick succession.
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!mounted) return
+      if (session?.user) {
+        setUser(session.user)
+        await Promise.all([fetchProfile(session.user.id, session.user), fetchOrgs()])
+      }
+      if (mounted) setLoading(false)
+    })
+
+    // onAuthStateChange handles future events only; INITIAL_SESSION is already
+    // covered by getSession() above, so we skip it to avoid a second lock acquisition.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'INITIAL_SESSION') return
+
       if (session?.user) {
         setUser(session.user)
         await Promise.all([fetchProfile(session.user.id, session.user), fetchOrgs()])
@@ -98,9 +116,13 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
         setOrganizations([])
         setCurrentOrgState(null)
       }
-      setLoading(false)
+      if (mounted) setLoading(false)
     })
-    return () => subscription.unsubscribe()
+
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
   }, [fetchProfile, fetchOrgs, supabase])
 
   const setCurrentOrg = (org: OrgWithRole) => {
