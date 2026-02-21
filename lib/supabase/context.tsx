@@ -42,8 +42,25 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   const fetchProfile = useCallback(
-    async (userId: string) => {
+    async (userId: string, user?: User) => {
       const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
+
+      // Profile missing — user signed up before migrations were applied.
+      // Create it now using data from the auth session.
+      if (!data && user) {
+        const meta = user.user_metadata ?? {}
+        await supabase.from('profiles').upsert({
+          id: userId,
+          email: user.email ?? '',
+          full_name: meta.full_name ?? meta.name ?? null,
+          avatar_url: meta.avatar_url ?? meta.picture ?? null,
+          onboarding_completed: false,
+        })
+        const { data: created } = await supabase.from('profiles').select('*').eq('id', userId).single()
+        setProfile(created)
+        return created as Profile | null
+      }
+
       setProfile(data)
       return data as Profile | null
     },
@@ -65,7 +82,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         setUser(session.user)
-        await Promise.all([fetchProfile(session.user.id), fetchOrgs()])
+        await Promise.all([fetchProfile(session.user.id, session.user), fetchOrgs()])
       } else {
         setUser(null)
         setProfile(null)
@@ -93,7 +110,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
         setCurrentOrg,
         loading,
         refreshProfile: () =>
-          user ? fetchProfile(user.id).then(() => {}) : Promise.resolve(),
+          user ? fetchProfile(user.id, user).then(() => {}) : Promise.resolve(),
         refreshOrgs: () => fetchOrgs().then(() => {}),
       }}
     >
