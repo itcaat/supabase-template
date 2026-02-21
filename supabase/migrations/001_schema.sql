@@ -2,8 +2,7 @@
 -- 001_schema.sql — Core tables
 -- ============================================================
 
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- gen_random_uuid() is built into PostgreSQL 13+ — no extension needed.
 
 -- ============================================================
 -- Custom types
@@ -28,7 +27,7 @@ CREATE TABLE profiles (
 -- organizations
 -- ============================================================
 CREATE TABLE organizations (
-  id         UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   name       TEXT        NOT NULL,
   slug       TEXT        NOT NULL UNIQUE,
   type       org_type    NOT NULL DEFAULT 'personal',
@@ -41,7 +40,7 @@ CREATE TABLE organizations (
 -- organization_members
 -- ============================================================
 CREATE TABLE organization_members (
-  id         UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id     UUID        NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   user_id    UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   role       member_role NOT NULL DEFAULT 'member',
@@ -53,7 +52,7 @@ CREATE TABLE organization_members (
 -- projects
 -- ============================================================
 CREATE TABLE projects (
-  id          UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id      UUID        NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   name        TEXT        NOT NULL,
   slug        TEXT        NOT NULL,
@@ -68,7 +67,7 @@ CREATE TABLE projects (
 -- project_members
 -- ============================================================
 CREATE TABLE project_members (
-  id         UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   user_id    UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   role       member_role NOT NULL DEFAULT 'member',
@@ -80,12 +79,12 @@ CREATE TABLE project_members (
 -- invitations
 -- ============================================================
 CREATE TABLE invitations (
-  id          UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id      UUID        NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   project_id  UUID        REFERENCES projects(id) ON DELETE CASCADE,
   email       TEXT        NOT NULL,
   role        member_role NOT NULL,
-  token       UUID        NOT NULL UNIQUE DEFAULT uuid_generate_v4(),
+  token       UUID        NOT NULL UNIQUE DEFAULT gen_random_uuid(),
   invited_by  UUID        REFERENCES auth.users(id) ON DELETE SET NULL,
   expires_at  TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '7 days'),
   accepted_at TIMESTAMPTZ,
