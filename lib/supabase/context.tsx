@@ -34,7 +34,7 @@ function setCookie(name: string, value: string) {
 }
 
 export function SupabaseProvider({ children }: { children: React.ReactNode }) {
-  const [supabase] = useState(() => createClient())
+  const supabase = createClient()
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [organizations, setOrganizations] = useState<OrgWithRole[]>([])
