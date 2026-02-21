@@ -1,47 +1,31 @@
 'use client'
 
-import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, ChevronsUpDown, Plus, Building2 } from 'lucide-react'
+import { Check, ChevronsUpDown, Plus } from 'lucide-react'
+import { useSupabase } from '@/lib/supabase/context'
+import type { OrgWithRole } from '@/lib/supabase/context'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import type { Organization, MemberRole } from '@/types'
 import { isTeamsMode } from '@/lib/config'
 
-interface OrgWithRole extends Organization {
-  role: MemberRole
-}
-
-interface OrgSwitcherProps {
-  organizations: OrgWithRole[]
-  currentOrg: Organization
-}
-
 function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
+  return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
 }
 
-export function OrgSwitcher({ organizations, currentOrg }: OrgSwitcherProps) {
+export function OrgSwitcher() {
+  const { organizations, currentOrg, setCurrentOrg } = useSupabase()
   const router = useRouter()
   const teamsMode = isTeamsMode()
 
-  const handleSelect = (slug: string) => {
-    document.cookie = `active_org_slug=${slug}; path=/; max-age=2592000`
-    router.push(`/org/${slug}`)
-    router.refresh()
+  if (!currentOrg) return null
+
+  const handleSelect = (org: OrgWithRole) => {
+    setCurrentOrg(org)
+    router.push(`/org/${org.slug}`)
   }
 
   return (
@@ -50,9 +34,7 @@ export function OrgSwitcher({ organizations, currentOrg }: OrgSwitcherProps) {
         <Button variant="ghost" className="w-full justify-start gap-2 px-2 h-auto py-2">
           <Avatar className="h-6 w-6 rounded-md">
             <AvatarImage src={currentOrg.avatar_url ?? undefined} />
-            <AvatarFallback className="rounded-md text-xs">
-              {getInitials(currentOrg.name)}
-            </AvatarFallback>
+            <AvatarFallback className="rounded-md text-xs">{getInitials(currentOrg.name)}</AvatarFallback>
           </Avatar>
           <div className="flex-1 text-left min-w-0">
             <p className="text-sm font-medium truncate">{currentOrg.name}</p>
@@ -65,16 +47,10 @@ export function OrgSwitcher({ organizations, currentOrg }: OrgSwitcherProps) {
         <DropdownMenuLabel>Organizations</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {organizations.map((org) => (
-          <DropdownMenuItem
-            key={org.id}
-            onClick={() => handleSelect(org.slug)}
-            className="gap-2"
-          >
+          <DropdownMenuItem key={org.id} onClick={() => handleSelect(org)} className="gap-2">
             <Avatar className="h-5 w-5 rounded-sm">
               <AvatarImage src={org.avatar_url ?? undefined} />
-              <AvatarFallback className="rounded-sm text-xs">
-                {getInitials(org.name)}
-              </AvatarFallback>
+              <AvatarFallback className="rounded-sm text-xs">{getInitials(org.name)}</AvatarFallback>
             </Avatar>
             <span className="flex-1 truncate">{org.name}</span>
             {org.id === currentOrg.id && <Check className="h-4 w-4" />}

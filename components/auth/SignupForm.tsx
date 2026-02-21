@@ -1,17 +1,18 @@
 'use client'
 
-import { useTransition } from 'react'
+import { Suspense, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { signUp } from '@/app/actions/auth'
+import { useSupabase } from '@/lib/supabase/context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { OAuthButton } from './OAuthButton'
 import { Separator } from '@/components/ui/separator'
+import { OAuthButton } from './OAuthButton'
 
 const schema = z.object({
   full_name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -20,30 +21,28 @@ const schema = z.object({
 })
 type FormData = z.infer<typeof schema>
 
-interface SignupFormProps {
-  inviteToken?: string
-}
-
-export function SignupForm({ inviteToken }: SignupFormProps) {
-  const [isPending, startTransition] = useTransition()
-  const [done, setDone] = useTransition()
+function SignupFormInner() {
+  const { supabase } = useSupabase()
+  const searchParams = useSearchParams()
+  const inviteToken = searchParams.get('invite')
+  const [isPending, setIsPending] = useState(false)
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
 
-  const onSubmit = (data: FormData) => {
-    startTransition(async () => {
-      const formData = new FormData()
-      formData.append('full_name', data.full_name)
-      formData.append('email', data.email)
-      formData.append('password', data.password)
-      const result = await signUp(formData)
-      if (result?.error) {
-        toast.error(result.error)
-      } else {
-        toast.success(result?.message ?? 'Account created! Check your email.')
-      }
+  const onSubmit = async (data: FormData) => {
+    setIsPending(true)
+    const { error } = await supabase.auth.signUp({
+      email: data.email,
+      password: data.password,
+      options: {
+        data: { full_name: data.full_name },
+        emailRedirectTo: `${window.location.origin}/auth/callback${inviteToken ? `?invite=${inviteToken}` : ''}`,
+      },
     })
+    if (error) toast.error(error.message)
+    else toast.success('Check your email to confirm your account.')
+    setIsPending(false)
   }
 
   return (
@@ -70,43 +69,20 @@ export function SignupForm({ inviteToken }: SignupFormProps) {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="full_name">Full name</Label>
-          <Input
-            id="full_name"
-            placeholder="Jane Doe"
-            autoComplete="name"
-            {...register('full_name')}
-          />
-          {errors.full_name && (
-            <p className="text-destructive text-xs">{errors.full_name.message}</p>
-          )}
+          <Input id="full_name" placeholder="Jane Doe" autoComplete="name" {...register('full_name')} />
+          {errors.full_name && <p className="text-destructive text-xs">{errors.full_name.message}</p>}
         </div>
 
         <div className="space-y-1.5">
           <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="you@example.com"
-            autoComplete="email"
-            {...register('email')}
-          />
-          {errors.email && (
-            <p className="text-destructive text-xs">{errors.email.message}</p>
-          )}
+          <Input id="email" type="email" placeholder="you@example.com" autoComplete="email" {...register('email')} />
+          {errors.email && <p className="text-destructive text-xs">{errors.email.message}</p>}
         </div>
 
         <div className="space-y-1.5">
           <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            type="password"
-            placeholder="••••••••"
-            autoComplete="new-password"
-            {...register('password')}
-          />
-          {errors.password && (
-            <p className="text-destructive text-xs">{errors.password.message}</p>
-          )}
+          <Input id="password" type="password" placeholder="••••••••" autoComplete="new-password" {...register('password')} />
+          {errors.password && <p className="text-destructive text-xs">{errors.password.message}</p>}
         </div>
 
         <Button type="submit" className="w-full" disabled={isPending}>
@@ -116,10 +92,16 @@ export function SignupForm({ inviteToken }: SignupFormProps) {
 
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{' '}
-        <Link href="/login" className="text-foreground font-medium hover:underline">
-          Sign in
-        </Link>
+        <Link href="/login" className="text-foreground font-medium hover:underline">Sign in</Link>
       </p>
     </div>
+  )
+}
+
+export function SignupForm() {
+  return (
+    <Suspense>
+      <SignupFormInner />
+    </Suspense>
   )
 }

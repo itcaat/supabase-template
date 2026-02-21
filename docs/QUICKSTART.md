@@ -1,114 +1,130 @@
 # Quick Start
 
-Get the template running locally in about 10 minutes.
-
 ## Prerequisites
 
-- Node.js 18+
-- [Supabase CLI](https://supabase.com/docs/guides/cli/getting-started) (for local dev)
-- A Supabase project (free tier works)
-- A [Resend](https://resend.com) account (for invite emails)
+- Node.js ≥ 20
+- A [Supabase](https://supabase.com) project (free tier works)
+- A [Resend](https://resend.com) account (free tier works, for invitation emails)
+- Supabase CLI installed (`npm i -g supabase`)
 
 ---
 
 ## 1. Clone and install
 
 ```bash
-git clone https://github.com/your-org/supabase-template.git my-app
-cd my-app
+git clone https://github.com/itcaat/supabase-template.git
+cd supabase-template
 npm install
 ```
 
----
-
-## 2. Set up environment variables
+## 2. Configure environment variables
 
 ```bash
 cp .env.example .env.local
 ```
 
-Edit `.env.local`:
+Open `.env.local` and fill in:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-# SUPABASE_SERVICE_ROLE_KEY is not required by this template
-
-NEXT_PUBLIC_WORKSPACE_MODE=teams    # solo | teams
-NEXT_PUBLIC_PROJECT_MODE=single     # single | multi
-
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-
-RESEND_API_KEY=re_your_api_key
-RESEND_FROM_EMAIL=noreply@yourdomain.com
-RESEND_FROM_NAME=MyApp
 ```
 
-You can find your Supabase keys in the project dashboard under
-**Settings → API**.
+Get these from **Supabase Dashboard → Project Settings → API**.
 
----
+## 3. Set up the database
 
-## 3. Apply database migrations
+Run the migrations against your Supabase project:
 
-### Option A: Supabase Cloud (dashboard SQL editor)
+```bash
+supabase link --project-ref <your-project-ref>
+supabase db push
+```
 
-Run the following files in order in the Supabase SQL editor:
-
+Or apply them manually in the SQL Editor (in order):
 1. `supabase/migrations/001_schema.sql`
 2. `supabase/migrations/002_rls.sql`
 3. `supabase/migrations/003_functions.sql`
 
-### Option B: Supabase CLI (local dev)
+## 4. Deploy the invite email Edge Function
+
+The invitation email is sent via a **Supabase Edge Function** that calls Resend.
+This keeps your Resend API key out of the browser entirely.
 
 ```bash
-supabase login
-supabase link --project-ref your-project-ref
-supabase db push
+# Link to your project if not already done
+supabase link --project-ref <your-project-ref>
+
+# Deploy the function
+supabase functions deploy send-invite-email
 ```
 
----
+Set the required secrets in **Supabase Dashboard → Edge Functions → Secrets**
+(or via CLI):
 
-## 4. Configure Supabase Auth
+```bash
+supabase secrets set RESEND_API_KEY=re_xxxxxxxxxxxx
+supabase secrets set FROM_EMAIL=noreply@yourdomain.com
+supabase secrets set FROM_NAME=YourApp
+supabase secrets set APP_URL=https://yourapp.com
+```
 
-In your Supabase dashboard:
+`SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are
+injected automatically by Supabase — you do not need to set them manually.
 
-1. Go to **Authentication → URL Configuration**
-2. Set **Site URL** to `http://localhost:3000`
-3. Add to **Redirect URLs**: `http://localhost:3000/auth/callback`
-
-For OAuth (optional):
-- Go to **Authentication → Providers**
-- Enable Google and/or GitHub, add your OAuth credentials
-
----
-
-## 5. Run the development server
+## 5. Run locally
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and sign up.
-
-The `handle_new_user` trigger automatically creates:
-- A profile
-- A personal organization
-- A default project
-- An owner membership
-
-You'll be routed through the onboarding wizard on first login.
+Open [http://localhost:3000](http://localhost:3000).
 
 ---
 
-## 6. Deploy to production
+## Architecture: CSR + Edge Functions
+
+This template is **client-side rendered (CSR)**:
+
+- All pages use `'use client'` and fetch data directly from Supabase via the browser client.
+- There are no Server Actions or server-side data fetching in pages.
+- Auth state is managed by a single `SupabaseProvider` context at the root, available everywhere.
+- The only server route is `/auth/callback` — needed to exchange OAuth/email-confirm codes for a session.
+
+Email sending uses a **Supabase Edge Function** (`send-invite-email`):
+
+```
+browser → supabase.functions.invoke('send-invite-email') → Resend API
+```
+
+The Edge Function verifies the caller is an authenticated org admin before sending.
+
+## Mode configuration
+
+Set optional environment variables to toggle product modes:
+
+```env
+NEXT_PUBLIC_WORKSPACE_MODE=solo   # solo | teams (default: solo)
+NEXT_PUBLIC_PROJECT_MODE=single   # single | multi (default: single)
+```
+
+See [`docs/MODES.md`](./MODES.md) for details.
+
+---
+
+## Deploying
 
 ### Vercel (recommended)
 
 ```bash
-npx vercel --prod
+npx vercel
 ```
 
-Set environment variables in the Vercel dashboard, and update:
-- `NEXT_PUBLIC_APP_URL` to your production URL
-- Supabase **Site URL** and **Redirect URLs** to your production domain
+Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in Vercel's
+environment variable settings. Edge Function secrets stay in Supabase.
+
+### Other platforms (Netlify, Cloudflare Pages, Railway…)
+
+Build command: `npm run build`  
+Output directory: `.next`  
+Node version: ≥ 20

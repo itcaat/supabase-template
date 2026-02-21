@@ -1,46 +1,36 @@
 'use client'
 
-import { useTransition } from 'react'
-import { toast } from 'sonner'
+import { useState } from 'react'
+import { format } from 'date-fns'
 import { X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { toast } from 'sonner'
+import { useSupabase } from '@/lib/supabase/context'
 import { Badge } from '@/components/ui/badge'
-import { revokeInvitation } from '@/app/actions/invites'
+import { Button } from '@/components/ui/button'
 import { ROLE_LABELS } from '@/lib/rbac'
-import type { Invitation, MemberRole } from '@/types'
+import type { Invitation } from '@/types'
 
 interface InviteTableProps {
   invitations: Invitation[]
   canManage: boolean
+  onMutate: () => void
 }
 
-function timeUntil(date: string): string {
-  const diff = new Date(date).getTime() - Date.now()
-  if (diff <= 0) return 'Expired'
-  const days = Math.floor(diff / 86400000)
-  if (days > 0) return `${days}d left`
-  const hours = Math.floor(diff / 3600000)
-  return `${hours}h left`
-}
+export function InviteTable({ invitations, canManage, onMutate }: InviteTableProps) {
+  const { supabase } = useSupabase()
+  const [isPending, setIsPending] = useState(false)
 
-export function InviteTable({ invitations, canManage }: InviteTableProps) {
-  const [isPending, startTransition] = useTransition()
-
-  const handleRevoke = (id: string, email: string) => {
+  const handleRevoke = async (id: string, email: string) => {
     if (!confirm(`Revoke invitation for ${email}?`)) return
-    startTransition(async () => {
-      const result = await revokeInvitation(id)
-      if (result?.error) toast.error(result.error)
-      else toast.success('Invitation revoked')
-    })
+    setIsPending(true)
+    const { error } = await supabase.from('invitations').delete().eq('id', id)
+    if (error) toast.error(error.message)
+    else { toast.success('Invitation revoked'); onMutate() }
+    setIsPending(false)
   }
 
   if (invitations.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground py-4 text-center">
-        No pending invitations
-      </p>
-    )
+    return <p className="text-sm text-muted-foreground">No pending invitations.</p>
   }
 
   return (
@@ -48,18 +38,15 @@ export function InviteTable({ invitations, canManage }: InviteTableProps) {
       {invitations.map((inv) => (
         <div key={inv.id} className="flex items-center gap-3 p-3">
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{inv.email}</p>
-            <p className="text-xs text-muted-foreground">{timeUntil(inv.expires_at)}</p>
+            <p className="text-sm truncate">{inv.email}</p>
+            <p className="text-xs text-muted-foreground">
+              Expires {format(new Date(inv.expires_at), 'MMM d, yyyy')}
+            </p>
           </div>
-          <Badge variant="secondary">{ROLE_LABELS[inv.role]}</Badge>
+          <Badge variant="outline">{ROLE_LABELS[inv.role]}</Badge>
           {canManage && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-destructive"
-              onClick={() => handleRevoke(inv.id, inv.email)}
-              disabled={isPending}
-            >
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive"
+              disabled={isPending} onClick={() => handleRevoke(inv.id, inv.email)}>
               <X className="h-4 w-4" />
             </Button>
           )}

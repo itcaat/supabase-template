@@ -1,61 +1,52 @@
-import { redirect, notFound } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
+import { useCallback, useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { useSupabase } from '@/lib/supabase/context'
 import { MemberTable } from '@/components/organizations/MemberTable'
 import { InviteForm } from '@/components/organizations/InviteForm'
 import { InviteTable } from '@/components/organizations/InviteTable'
+import { Skeleton } from '@/components/ui/skeleton'
 import { canDo } from '@/lib/rbac'
 import { isTeamsMode } from '@/lib/config'
-import type { MemberRole, OrganizationMember, Profile } from '@/types'
+import type { Invitation, MemberRole, OrganizationMember, Profile } from '@/types'
 
-interface Props {
-  params: Promise<{ slug: string }>
-}
+interface MemberWithProfile extends OrganizationMember { profile: Profile }
 
-export const metadata = { title: 'Members' }
+export default function MembersPage() {
+  const { slug } = useParams<{ slug: string }>()
+  const { supabase, user } = useSupabase()
+  const [org, setOrg] = useState<{ id: string; name: string } | null>(null)
+  const [members, setMembers] = useState<MemberWithProfile[]>([])
+  const [invitations, setInvitations] = useState<Invitation[]>([])
+  const [currentUserRole, setCurrentUserRole] = useState<MemberRole>('viewer')
+  const [loading, setLoading] = useState(true)
 
-export default async function MembersPage({ params }: Props) {
-  const { slug } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const load = useCallback(async () => {
+    if (!user || !slug) return
+    const { data: orgData } = await supabase.from('organizations').select('id,name').eq('slug', slug).single()
+    if (!orgData) return
+    setOrg(orgData)
 
-  const { data: org } = await supabase
-    .from('organizations')
-    .select('*')
-    .eq('slug', slug)
-    .single()
-  if (!org) notFound()
+    const [{ data: membersData }, { data: invData }, { data: myMembership }] = await Promise.all([
+      supabase.from('organization_members').select('*, profile:profiles(*)').eq('org_id', orgData.id).order('created_at'),
+      supabase.from('invitations').select('*').eq('org_id', orgData.id).is('accepted_at', null).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }),
+      supabase.from('organization_members').select('role').eq('org_id', orgData.id).eq('user_id', user.id).single(),
+    ])
 
-  const { data: membership } = await supabase
-    .from('organization_members')
-    .select('role')
-    .eq('org_id', org.id)
-    .eq('user_id', user.id)
-    .single()
-  if (!membership) notFound()
+    setMembers((membersData ?? []) as unknown as MemberWithProfile[])
+    setInvitations(invData ?? [])
+    setCurrentUserRole((myMembership?.role ?? 'viewer') as MemberRole)
+    setLoading(false)
+  }, [slug, user, supabase])
 
-  const currentUserRole = membership.role as MemberRole
-
-  // Fetch members with profiles
-  const { data: membersData } = await supabase
-    .from('organization_members')
-    .select('*, profile:profiles(*)')
-    .eq('org_id', org.id)
-    .order('created_at', { ascending: true })
-
-  const members = (membersData ?? []) as unknown as (OrganizationMember & { profile: Profile })[]
-
-  // Fetch pending invitations
-  const { data: invitations } = await supabase
-    .from('invitations')
-    .select('*')
-    .eq('org_id', org.id)
-    .is('accepted_at', null)
-    .gt('expires_at', new Date().toISOString())
-    .order('created_at', { ascending: false })
+  useEffect(() => { load() }, [load])
 
   const teamsMode = isTeamsMode()
   const canInvite = canDo(currentUserRole, 'invite_members') && teamsMode
+
+  if (loading) return <div className="p-8 space-y-4"><Skeleton className="h-8 w-32" /><Skeleton className="h-48" /></div>
+  if (!org) return <div className="p-8 text-muted-foreground">Organization not found.</div>
 
   return (
     <div className="p-8 max-w-3xl space-y-8">
@@ -73,8 +64,9 @@ export default async function MembersPage({ params }: Props) {
         <MemberTable
           members={members}
           orgId={org.id}
-          currentUserId={user.id}
+          currentUserId={user!.id}
           currentUserRole={currentUserRole}
+          onMutate={load}
         />
       </section>
 
@@ -83,13 +75,8 @@ export default async function MembersPage({ params }: Props) {
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
             Pending invitations
           </h2>
-          {canInvite && (
-            <InviteForm orgId={org.id} />
-          )}
-          <InviteTable
-            invitations={invitations ?? []}
-            canManage={canInvite}
-          />
+          {canInvite && <InviteForm orgId={org.id} onMutate={load} />}
+          <InviteTable invitations={invitations} canManage={canInvite} onMutate={load} />
         </section>
       )}
     </div>

@@ -3,16 +3,11 @@ import { SignupForm } from '@/components/auth/SignupForm'
 
 export const metadata = { title: 'Create account' }
 
-interface Props {
-  searchParams: Promise<{ invite?: string }>
-}
-
-export default async function SignupPage({ searchParams }: Props) {
-  const { invite } = await searchParams
+export default function SignupPage() {
   return (
     <Card>
       <CardContent className="pt-6">
-        <SignupForm inviteToken={invite} />
+        <SignupForm />
       </CardContent>
     </Card>
   )

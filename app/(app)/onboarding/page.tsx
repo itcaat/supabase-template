@@ -1,27 +1,29 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useSupabase } from '@/lib/supabase/context'
 import { WizardShell } from '@/components/onboarding/WizardShell'
+import { Skeleton } from '@/components/ui/skeleton'
 
-export const metadata = { title: 'Setup' }
+export default function OnboardingPage() {
+  const { user, profile, organizations, loading } = useSupabase()
+  const router = useRouter()
 
-export default async function OnboardingPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  useEffect(() => {
+    if (!loading && !user) router.push('/login')
+    if (!loading && profile?.onboarding_completed) router.push('/dashboard')
+  }, [user, profile, loading, router])
 
-  // If already onboarded, go to dashboard
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('onboarding_completed')
-    .eq('id', user.id)
-    .single()
+  if (loading || !user || !profile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Skeleton className="h-8 w-48" />
+      </div>
+    )
+  }
 
-  if (profile?.onboarding_completed) redirect('/dashboard')
-
-  // Get personal org (created automatically on signup)
-  const { data: orgsData } = await supabase.rpc('get_user_organizations')
-  const orgs = orgsData ?? []
-  const personalOrg = orgs.find((o: { type: string }) => o.type === 'personal') ?? orgs[0]
+  const personalOrg = organizations.find((o) => o.type === 'personal') ?? organizations[0]
 
   if (!personalOrg) {
     return (

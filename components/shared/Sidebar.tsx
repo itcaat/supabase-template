@@ -1,30 +1,23 @@
+'use client'
+
 import Link from 'next/link'
-import { LayoutDashboard, Users, FolderOpen, Settings, ChevronRight } from 'lucide-react'
+import { usePathname } from 'next/navigation'
+import { LayoutDashboard, Users, FolderOpen, Settings } from 'lucide-react'
+import { useSupabase } from '@/lib/supabase/context'
 import { OrgSwitcher } from '@/components/organizations/OrgSwitcher'
 import { UserMenu } from '@/components/shared/UserMenu'
 import { cn } from '@/lib/utils'
-import type { Organization, Profile, MemberRole } from '@/types'
 import { isMultiProjectMode } from '@/lib/config'
-
-interface OrgWithRole extends Organization {
-  role: MemberRole
-}
-
-interface SidebarProps {
-  profile: Profile
-  organizations: OrgWithRole[]
-  currentOrg: Organization
-  currentSlug: string
-}
 
 interface NavItemProps {
   href: string
   icon: React.ReactNode
   label: string
-  active?: boolean
 }
 
-function NavItem({ href, icon, label, active }: NavItemProps) {
+function NavItem({ href, icon, label }: NavItemProps) {
+  const pathname = usePathname()
+  const active = pathname === href || pathname.startsWith(href + '/')
   return (
     <Link
       href={href}
@@ -41,46 +34,30 @@ function NavItem({ href, icon, label, active }: NavItemProps) {
   )
 }
 
-export function Sidebar({ profile, organizations, currentOrg, currentSlug }: SidebarProps) {
+export function Sidebar() {
+  const { profile, currentOrg } = useSupabase()
   const multiProject = isMultiProjectMode()
-  const orgBase = `/org/${currentSlug}`
+  const orgBase = currentOrg ? `/org/${currentOrg.slug}` : '#'
+
+  if (!profile || !currentOrg) return null
 
   return (
     <aside className="flex h-screen w-60 shrink-0 flex-col border-r bg-background">
-      {/* Org switcher */}
       <div className="p-2 border-b">
-        <OrgSwitcher organizations={organizations} currentOrg={currentOrg} />
+        <OrgSwitcher />
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
-        <NavItem
-          href="/dashboard"
-          icon={<LayoutDashboard className="h-4 w-4" />}
-          label="Dashboard"
-        />
-        <NavItem
-          href={`${orgBase}/members`}
-          icon={<Users className="h-4 w-4" />}
-          label="Members"
-        />
+        <NavItem href="/dashboard" icon={<LayoutDashboard className="h-4 w-4" />} label="Dashboard" />
+        <NavItem href={`${orgBase}/members`} icon={<Users className="h-4 w-4" />} label="Members" />
         {multiProject && (
-          <NavItem
-            href={`${orgBase}/projects`}
-            icon={<FolderOpen className="h-4 w-4" />}
-            label="Projects"
-          />
+          <NavItem href={`${orgBase}/projects`} icon={<FolderOpen className="h-4 w-4" />} label="Projects" />
         )}
-        <NavItem
-          href={`${orgBase}/settings`}
-          icon={<Settings className="h-4 w-4" />}
-          label="Org Settings"
-        />
+        <NavItem href={`${orgBase}/settings`} icon={<Settings className="h-4 w-4" />} label="Org Settings" />
       </nav>
 
-      {/* User section */}
       <div className="p-2 border-t">
-        <UserMenu profile={profile} />
+        <UserMenu />
       </div>
     </aside>
   )

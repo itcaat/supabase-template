@@ -1,12 +1,12 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { resetPassword } from '@/app/actions/auth'
+import { useSupabase } from '@/lib/supabase/context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,20 +16,20 @@ const schema = z.object({ email: z.string().email('Invalid email') })
 type FormData = z.infer<typeof schema>
 
 export default function ResetPasswordPage() {
-  const [isPending, startTransition] = useTransition()
-  const [sent, setSent] = useTransition()
+  const { supabase } = useSupabase()
+  const [isPending, setIsPending] = useState(false)
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
 
-  const onSubmit = (data: FormData) => {
-    startTransition(async () => {
-      const formData = new FormData()
-      formData.append('email', data.email)
-      const result = await resetPassword(formData)
-      if (result?.error) toast.error(result.error)
-      else toast.success(result?.message ?? 'Check your email!')
+  const onSubmit = async (data: FormData) => {
+    setIsPending(true)
+    const { error } = await supabase.auth.resetPasswordForEmail(data.email, {
+      redirectTo: `${window.location.origin}/auth/callback?next=/settings/update-password`,
     })
+    if (error) toast.error(error.message)
+    else toast.success('Password reset link sent to your email.')
+    setIsPending(false)
   }
 
   return (
@@ -54,9 +54,7 @@ export default function ResetPasswordPage() {
         </form>
 
         <p className="text-center text-sm text-muted-foreground">
-          <Link href="/login" className="text-foreground font-medium hover:underline">
-            Back to login
-          </Link>
+          <Link href="/login" className="text-foreground font-medium hover:underline">Back to login</Link>
         </p>
       </CardContent>
     </Card>

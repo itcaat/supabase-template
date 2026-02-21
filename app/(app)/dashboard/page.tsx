@@ -1,44 +1,26 @@
-import { redirect } from 'next/navigation'
-import { cookies } from 'next/headers'
-import Link from 'next/link'
-import { Plus } from 'lucide-react'
-import { createClient } from '@/lib/supabase/server'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { isTeamsMode, isMultiProjectMode } from '@/lib/config'
-import { ROLE_LABELS } from '@/lib/rbac'
-import type { Organization, MemberRole } from '@/types'
+'use client'
 
-interface OrgWithRole extends Organization {
-  role: MemberRole
-}
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useSupabase } from '@/lib/supabase/context'
+import { Skeleton } from '@/components/ui/skeleton'
 
-export const metadata = { title: 'Dashboard' }
+export default function DashboardPage() {
+  const { currentOrg, loading } = useSupabase()
+  const router = useRouter()
 
-export default async function DashboardPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: orgsData } = await supabase.rpc('get_user_organizations')
-  const organizations: OrgWithRole[] = orgsData ?? []
-
-  const cookieStore = await cookies()
-  const activeSlug = cookieStore.get('active_org_slug')?.value
-  const currentOrg = organizations.find((o) => o.slug === activeSlug) ?? organizations[0]
-
-  const teamsMode = isTeamsMode()
-  const multiProject = isMultiProjectMode()
-
-  // Redirect to current org page
-  if (currentOrg) {
-    redirect(`/org/${currentOrg.slug}`)
-  }
+  useEffect(() => {
+    if (!loading && currentOrg) {
+      router.replace(`/org/${currentOrg.slug}`)
+    }
+  }, [currentOrg, loading, router])
 
   return (
-    <div className="p-8">
-      <p className="text-muted-foreground">No organization found. Please contact support.</p>
+    <div className="flex h-full items-center justify-center">
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-48" />
+        <Skeleton className="h-4 w-32" />
+      </div>
     </div>
   )
 }

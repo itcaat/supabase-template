@@ -1,9 +1,9 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { acceptInvitation } from '@/app/actions/invites'
+import { useSupabase } from '@/lib/supabase/context'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -13,20 +13,18 @@ interface AcceptInviteButtonProps {
 }
 
 export function AcceptInviteButton({ token, className }: AcceptInviteButtonProps) {
-  const [isPending, startTransition] = useTransition()
+  const { supabase, refreshOrgs } = useSupabase()
   const router = useRouter()
+  const [isPending, setIsPending] = useState(false)
 
-  const handleAccept = () => {
-    startTransition(async () => {
-      const result = await acceptInvitation(token)
-      if (result?.error) {
-        toast.error(result.error)
-      } else {
-        toast.success('Invitation accepted! Welcome to the team.')
-        const orgSlug = result?.orgSlug
-        router.push(orgSlug ? `/org/${orgSlug}` : '/dashboard')
-      }
-    })
+  const handleAccept = async () => {
+    setIsPending(true)
+    const { data, error } = await supabase.rpc('accept_invitation', { invitation_token: token })
+    if (error) { toast.error(error.message); setIsPending(false); return }
+    if (!data?.success) { toast.error('Failed to accept invitation'); setIsPending(false); return }
+    toast.success('Invitation accepted!')
+    await refreshOrgs()
+    router.push('/dashboard')
   }
 
   return (

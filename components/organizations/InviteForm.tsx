@@ -1,81 +1,84 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { Mail } from 'lucide-react'
-import { createInvitation } from '@/app/actions/invites'
+import { useSupabase } from '@/lib/supabase/context'
+import { sendInviteEmail } from '@/lib/invites'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { RoleSelector } from './RoleSelector'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { MemberRole } from '@/types'
 
 const schema = z.object({
-  email: z.string().email('Invalid email address'),
-  role: z.enum(['admin', 'member', 'viewer'] as const),
+  email: z.string().email('Invalid email'),
+  role: z.enum(['admin', 'member', 'viewer']),
 })
 type FormData = z.infer<typeof schema>
 
 interface InviteFormProps {
   orgId: string
-  projectId?: string
+  onMutate: () => void
 }
 
-export function InviteForm({ orgId, projectId }: InviteFormProps) {
-  const [isPending, startTransition] = useTransition()
-  const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<FormData>({
+export function InviteForm({ orgId, onMutate }: InviteFormProps) {
+  const { supabase, user } = useSupabase()
+  const [isPending, setIsPending] = useState(false)
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { email: '', role: 'member' },
+    defaultValues: { role: 'member' },
   })
 
-  const role = watch('role')
+  const onSubmit = async (data: FormData) => {
+    if (!user) return
+    setIsPending(true)
 
-  const onSubmit = (data: FormData) => {
-    startTransition(async () => {
-      const result = await createInvitation(orgId, data.email, data.role, projectId)
-      if (result?.error) {
-        toast.error(result.error)
-      } else {
-        toast.success(`Invitation sent to ${data.email}`)
-        reset()
-      }
-    })
+    try {
+      // Create the invitation record
+      const token = crypto.randomUUID()
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      const { data: inv, error: invErr } = await supabase.from('invitations').insert({
+        org_id: orgId,
+        email: data.email,
+        role: data.role as MemberRole,
+        token,
+        invited_by: user.id,
+        expires_at: expiresAt,
+      }).select('id').single()
+
+      if (invErr) { toast.error(invErr.message); return }
+
+      // Send invite email via Edge Function
+      const { success, error } = await sendInviteEmail(supabase, inv.id)
+      if (!success) toast.error(`Invite created but email failed: ${error}`)
+      else toast.success(`Invitation sent to ${data.email}`)
+
+      reset()
+      onMutate()
+    } finally {
+      setIsPending(false)
+    }
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex items-end gap-2">
-      <div className="flex-1 space-y-1.5">
-        <Label htmlFor="invite-email">Invite by email</Label>
-        <div className="relative">
-          <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            id="invite-email"
-            type="email"
-            placeholder="colleague@example.com"
-            className="pl-8"
-            {...register('email')}
-          />
-        </div>
-        {errors.email && (
-          <p className="text-destructive text-xs">{errors.email.message}</p>
-        )}
+    <form onSubmit={handleSubmit(onSubmit)} className="flex gap-2">
+      <div className="flex-1">
+        <Input placeholder="colleague@example.com" type="email" {...register('email')} />
+        {errors.email && <p className="text-destructive text-xs mt-1">{errors.email.message}</p>}
       </div>
-
-      <div className="space-y-1.5">
-        <Label>Role</Label>
-        <RoleSelector
-          value={role}
-          onChange={(r) => setValue('role', r as 'admin' | 'member' | 'viewer')}
-          disabled={isPending}
-        />
-      </div>
-
-      <Button type="submit" disabled={isPending}>
-        {isPending ? 'Sending…' : 'Send invite'}
-      </Button>
+      <Select value={watch('role')} onValueChange={(v) => setValue('role', v as FormData['role'])}>
+        <SelectTrigger className="w-28">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="admin">Admin</SelectItem>
+          <SelectItem value="member">Member</SelectItem>
+          <SelectItem value="viewer">Viewer</SelectItem>
+        </SelectContent>
+      </Select>
+      <Button type="submit" disabled={isPending}>{isPending ? 'Sending…' : 'Invite'}</Button>
     </form>
   )
 }

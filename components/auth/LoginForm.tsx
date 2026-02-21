@@ -1,17 +1,18 @@
 'use client'
 
-import { useTransition } from 'react'
+import { Suspense, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { signIn } from '@/app/actions/auth'
+import { useSupabase } from '@/lib/supabase/context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { OAuthButton } from './OAuthButton'
 import { Separator } from '@/components/ui/separator'
+import { OAuthButton } from './OAuthButton'
 
 const schema = z.object({
   email: z.string().email('Invalid email address'),
@@ -19,20 +20,27 @@ const schema = z.object({
 })
 type FormData = z.infer<typeof schema>
 
-export function LoginForm() {
-  const [isPending, startTransition] = useTransition()
+function LoginFormInner() {
+  const { supabase } = useSupabase()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [isPending, setIsPending] = useState(false)
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
 
-  const onSubmit = (data: FormData) => {
-    startTransition(async () => {
-      const formData = new FormData()
-      formData.append('email', data.email)
-      formData.append('password', data.password)
-      const result = await signIn(formData)
-      if (result?.error) toast.error(result.error)
+  const onSubmit = async (data: FormData) => {
+    setIsPending(true)
+    const { error } = await supabase.auth.signInWithPassword({
+      email: data.email,
+      password: data.password,
     })
+    if (error) {
+      toast.error(error.message)
+      setIsPending(false)
+    } else {
+      router.push(searchParams.get('redirect') ?? '/dashboard')
+    }
   }
 
   return (
@@ -57,38 +65,19 @@ export function LoginForm() {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="you@example.com"
-            autoComplete="email"
-            {...register('email')}
-          />
-          {errors.email && (
-            <p className="text-destructive text-xs">{errors.email.message}</p>
-          )}
+          <Input id="email" type="email" placeholder="you@example.com" autoComplete="email" {...register('email')} />
+          {errors.email && <p className="text-destructive text-xs">{errors.email.message}</p>}
         </div>
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password">Password</Label>
-            <Link
-              href="/reset-password"
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
+            <Link href="/reset-password" className="text-xs text-muted-foreground hover:text-foreground">
               Forgot password?
             </Link>
           </div>
-          <Input
-            id="password"
-            type="password"
-            placeholder="••••••••"
-            autoComplete="current-password"
-            {...register('password')}
-          />
-          {errors.password && (
-            <p className="text-destructive text-xs">{errors.password.message}</p>
-          )}
+          <Input id="password" type="password" placeholder="••••••••" autoComplete="current-password" {...register('password')} />
+          {errors.password && <p className="text-destructive text-xs">{errors.password.message}</p>}
         </div>
 
         <Button type="submit" className="w-full" disabled={isPending}>
@@ -98,10 +87,16 @@ export function LoginForm() {
 
       <p className="text-center text-sm text-muted-foreground">
         Don&apos;t have an account?{' '}
-        <Link href="/signup" className="text-foreground font-medium hover:underline">
-          Sign up
-        </Link>
+        <Link href="/signup" className="text-foreground font-medium hover:underline">Sign up</Link>
       </p>
     </div>
+  )
+}
+
+export function LoginForm() {
+  return (
+    <Suspense>
+      <LoginFormInner />
+    </Suspense>
   )
 }

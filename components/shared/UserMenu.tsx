@@ -1,45 +1,34 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
-import { User, Settings, LogOut, ChevronsUpDown } from 'lucide-react'
-import { signOut } from '@/app/actions/auth'
+import { useRouter } from 'next/navigation'
+import { Settings, LogOut, ChevronsUpDown } from 'lucide-react'
+import { useSupabase } from '@/lib/supabase/context'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import type { Profile } from '@/types'
-
-interface UserMenuProps {
-  profile: Profile
-}
 
 function getInitials(name: string | null, email: string): string {
-  if (name) {
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2)
-  }
+  if (name) return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
   return email.slice(0, 2).toUpperCase()
 }
 
-export function UserMenu({ profile }: UserMenuProps) {
-  const [isPending, startTransition] = useTransition()
+export function UserMenu() {
+  const { supabase, user, profile } = useSupabase()
+  const router = useRouter()
+  const [isPending, setIsPending] = useState(false)
 
-  const handleSignOut = () => {
-    startTransition(async () => {
-      await signOut()
-    })
+  const handleSignOut = async () => {
+    setIsPending(true)
+    await supabase.auth.signOut()
+    router.push('/login')
   }
+
+  if (!profile || !user) return null
 
   return (
     <DropdownMenu>
@@ -51,9 +40,7 @@ export function UserMenu({ profile }: UserMenuProps) {
               {getInitials(profile.full_name, profile.email)}
             </AvatarFallback>
           </Avatar>
-          <span className="flex-1 text-left text-sm truncate">
-            {profile.full_name ?? profile.email}
-          </span>
+          <span className="flex-1 text-left text-sm truncate">{profile.full_name ?? profile.email}</span>
           <ChevronsUpDown className="h-3 w-3 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
@@ -66,10 +53,7 @@ export function UserMenu({ profile }: UserMenuProps) {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href="/settings">
-            <Settings className="mr-2 h-4 w-4" />
-            Settings
-          </Link>
+          <Link href="/settings"><Settings className="mr-2 h-4 w-4" />Settings</Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleSignOut} disabled={isPending} className="text-destructive">

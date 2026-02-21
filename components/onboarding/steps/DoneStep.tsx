@@ -1,43 +1,46 @@
 'use client'
 
-import { useTransition } from 'react'
-import { CheckCircle2, ArrowRight } from 'lucide-react'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { CheckCircle2 } from 'lucide-react'
+import { useSupabase } from '@/lib/supabase/context'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import type { OrgWithRole } from '@/lib/supabase/context'
 
-interface DoneStepProps {
-  orgSlug: string
-  onFinish: () => void
-}
+interface DoneStepProps { org: OrgWithRole }
 
-export function DoneStep({ orgSlug, onFinish }: DoneStepProps) {
-  const [isPending, startTransition] = useTransition()
+export function DoneStep({ org }: DoneStepProps) {
+  const { supabase, user, refreshProfile, refreshOrgs, setCurrentOrg } = useSupabase()
+  const router = useRouter()
+  const [isPending, setIsPending] = useState(false)
 
-  const handleFinish = () => {
-    startTransition(async () => {
-      await onFinish()
-    })
+  const handleFinish = async () => {
+    if (!user) return
+    setIsPending(true)
+    await supabase.from('profiles').update({ onboarding_completed: true }).eq('id', user.id)
+    await Promise.all([refreshProfile(), refreshOrgs()])
+    setCurrentOrg(org)
+    router.push(`/org/${org.slug}`)
   }
 
   return (
-    <div className="space-y-6 text-center">
-      <div className="flex flex-col items-center py-4">
-        <div className="rounded-full bg-green-50 p-4 mb-4 dark:bg-green-950">
-          <CheckCircle2 className="h-10 w-10 text-green-600 dark:text-green-400" />
+    <Card>
+      <CardHeader className="text-center">
+        <div className="flex justify-center mb-4">
+          <CheckCircle2 className="h-12 w-12 text-green-500" />
         </div>
-        <h2 className="text-xl font-bold">You&apos;re all set!</h2>
-        <p className="text-muted-foreground text-sm mt-2 max-w-sm">
-          Your workspace is ready. Let&apos;s get to work.
-        </p>
-      </div>
-
-      <Button className="w-full" onClick={handleFinish} disabled={isPending}>
-        {isPending ? 'Loading…' : (
-          <>
-            Go to workspace
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </>
-        )}
-      </Button>
-    </div>
+        <CardTitle className="text-2xl">You&apos;re all set!</CardTitle>
+        <CardDescription>
+          <strong>{org.name}</strong> is ready to go.
+        </CardDescription>
+      </CardHeader>
+      <CardContent />
+      <CardFooter>
+        <Button className="w-full" onClick={handleFinish} disabled={isPending}>
+          {isPending ? 'Loading…' : 'Go to dashboard'}
+        </Button>
+      </CardFooter>
+    </Card>
   )
 }

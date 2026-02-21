@@ -1,83 +1,54 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { updatePassword } from '@/app/actions/auth'
+import { useSupabase } from '@/lib/supabase/context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
-const schema = z
-  .object({
-    password: z.string().min(8, 'Password must be at least 8 characters'),
-    confirmPassword: z.string(),
-  })
-  .refine((d) => d.password === d.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword'],
-  })
+const schema = z.object({
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  confirm: z.string(),
+}).refine((d) => d.password === d.confirm, { message: 'Passwords do not match', path: ['confirm'] })
 type FormData = z.infer<typeof schema>
 
 export function PasswordChangeForm() {
-  const [isPending, startTransition] = useTransition()
+  const { supabase } = useSupabase()
+  const [isPending, setIsPending] = useState(false)
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
 
-  const onSubmit = (data: FormData) => {
-    startTransition(async () => {
-      const formData = new FormData()
-      formData.append('password', data.password)
-      const result = await updatePassword(formData)
-      if (result?.error) toast.error(result.error)
-      else {
-        toast.success('Password updated')
-        reset()
-      }
-    })
+  const onSubmit = async (data: FormData) => {
+    setIsPending(true)
+    const { error } = await supabase.auth.updateUser({ password: data.password })
+    if (error) toast.error(error.message)
+    else { toast.success('Password updated'); reset() }
+    setIsPending(false)
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Password</CardTitle>
-        <CardDescription>Change your account password.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="new-password">New password</Label>
-            <Input
-              id="new-password"
-              type="password"
-              autoComplete="new-password"
-              {...register('password')}
-            />
-            {errors.password && (
-              <p className="text-destructive text-xs">{errors.password.message}</p>
-            )}
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="confirm-password">Confirm password</Label>
-            <Input
-              id="confirm-password"
-              type="password"
-              autoComplete="new-password"
-              {...register('confirmPassword')}
-            />
-            {errors.confirmPassword && (
-              <p className="text-destructive text-xs">{errors.confirmPassword.message}</p>
-            )}
-          </div>
-          <Button type="submit" disabled={isPending}>
-            {isPending ? 'Updating…' : 'Update password'}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+    <section className="space-y-4">
+      <h2 className="text-base font-semibold">Change password</h2>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="password">New password</Label>
+          <Input id="password" type="password" placeholder="••••••••" {...register('password')} />
+          {errors.password && <p className="text-destructive text-xs">{errors.password.message}</p>}
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="confirm">Confirm password</Label>
+          <Input id="confirm" type="password" placeholder="••••••••" {...register('confirm')} />
+          {errors.confirm && <p className="text-destructive text-xs">{errors.confirm.message}</p>}
+        </div>
+        <Button type="submit" disabled={isPending}>
+          {isPending ? 'Updating…' : 'Update password'}
+        </Button>
+      </form>
+    </section>
   )
 }
